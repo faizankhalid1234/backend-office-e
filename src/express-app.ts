@@ -48,6 +48,10 @@ export function createApp() {
           callback(null, true);
           return;
         }
+        if (/^https:\/\/admin-office[a-z0-9-]*\.vercel\.app$/i.test(origin)) {
+          callback(null, true);
+          return;
+        }
         callback(new Error(`CORS blocked: ${origin}`));
       },
       credentials: true,
