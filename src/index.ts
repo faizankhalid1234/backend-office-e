@@ -1,6 +1,9 @@
-import "dotenv/config";
+import { config } from "dotenv";
 import { connectMongo, disconnectMongo } from "./lib/mongo.js";
 import { createApp } from "./express-app.js";
+
+config();
+config({ path: ".env.local", override: true });
 
 const port = Number(process.env.PORT ?? process.env.BACKEND_PORT ?? 5000);
 
