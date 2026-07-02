@@ -96,7 +96,8 @@ export function createApp() {
         budget: "GET/POST /api/budget",
         dashboard: "GET /api/dashboard/stats",
         reports: "GET /api/reports?month=&year=",
-        fuelPrices: "GET /api/fuel-prices, POST /api/fuel-prices/webhook, POST /api/fuel-prices/sync",
+        fuelPrices:
+          "GET /api/fuel-prices/chile, POST /api/fuel-prices/webhook/petrol, POST /api/fuel-prices/webhook/diesel",
       },
     });
   });

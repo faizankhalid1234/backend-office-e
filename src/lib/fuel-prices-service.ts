@@ -21,6 +21,15 @@ export type FuelPricesResponse = {
   pakistan: Partial<Record<FuelType, PakistanFuelEntry>>;
 };
 
+/** Chile petrol + diesel only — no Pakistan */
+export type ChilePetrolDieselResponse = {
+  lastUpdated: string;
+  source: "n8n" | "database" | "fallback";
+  savedAt?: string;
+  petrol: ChileFuelEntry;
+  diesel: ChileFuelEntry;
+};
+
 const FUEL_TYPES: FuelType[] = ["gasoline", "diesel", "kerosene"];
 
 const DEFAULT_CHILE: Record<FuelType, ChileFuelEntry> = {
@@ -66,7 +75,15 @@ function readNumber(value: unknown): number | null {
 }
 
 function readClpFromRecord(record: Record<string, unknown>): number | null {
-  for (const field of ["clpPerLiter", "clp", "price", "precio", "value", "amount"]) {
+  for (const field of [
+    "clpPerLiter",
+    "clp",
+    "current_price_clp",
+    "price",
+    "precio",
+    "value",
+    "amount",
+  ]) {
     const num = readNumber(record[field]);
     if (num != null && num > 0) return num;
   }
@@ -464,4 +481,141 @@ export function verifyFuelWebhookSecret(authHeader: string | undefined): boolean
   if (authHeader === `Bearer ${secret}`) return true;
   if (authHeader === secret) return true;
   return false;
+}
+
+function readLastUpdated(raw: unknown): string {
+  if (!raw || typeof raw !== "object") {
+    return new Date().toISOString().slice(0, 10);
+  }
+  const record = raw as Record<string, unknown>;
+  for (const field of ["lastUpdated", "updatedAt", "date", "report_date"]) {
+    const value = record[field];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
+function buildChilePetrolDieselResponse(
+  chile: Record<FuelType, ChileFuelEntry>,
+  lastUpdated: string,
+  source: ChilePetrolDieselResponse["source"],
+  savedAt?: Date
+): ChilePetrolDieselResponse {
+  return {
+    lastUpdated,
+    source,
+    savedAt: savedAt?.toISOString(),
+    petrol: chile.gasoline,
+    diesel: chile.diesel,
+  };
+}
+
+function parseSingleChileEntry(
+  raw: unknown,
+  fuelType: "gasoline" | "diesel"
+): ChileFuelEntry | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+
+  const nested =
+    (record.chile as Record<string, unknown> | undefined)?.[fuelType] ??
+    (fuelType === "gasoline"
+      ? record.petrol ?? record.gasoline
+      : record.diesel);
+
+  const source =
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)
+      : record;
+
+  const clp = readClpFromRecord(source);
+  if (clp == null || clp <= 0) return null;
+
+  return {
+    label: readLabelFromRecord(source, DEFAULT_CHILE[fuelType].label),
+    clpPerLiter: clp,
+    usdPerLiter: readUsdFromRecord(source),
+  };
+}
+
+async function mergeAndSaveChileType(
+  fuelType: "gasoline" | "diesel",
+  entry: ChileFuelEntry,
+  raw: unknown,
+  ingestSource: "webhook" | "n8n" = "webhook"
+): Promise<ChilePetrolDieselResponse> {
+  const existing = await FuelPriceSnapshot.findOne({ snapshotKey: "latest" }).lean<IFuelPriceSnapshot>();
+
+  const chile: Record<FuelType, ChileFuelEntry> = {
+    gasoline: {
+      label: existing?.chile?.gasoline?.label ?? DEFAULT_CHILE.gasoline.label,
+      clpPerLiter: existing?.chile?.gasoline?.clpPerLiter ?? DEFAULT_CHILE.gasoline.clpPerLiter,
+      usdPerLiter: existing?.chile?.gasoline?.usdPerLiter ?? DEFAULT_CHILE.gasoline.usdPerLiter,
+    },
+    diesel: {
+      label: existing?.chile?.diesel?.label ?? DEFAULT_CHILE.diesel.label,
+      clpPerLiter: existing?.chile?.diesel?.clpPerLiter ?? DEFAULT_CHILE.diesel.clpPerLiter,
+      usdPerLiter: existing?.chile?.diesel?.usdPerLiter ?? DEFAULT_CHILE.diesel.usdPerLiter,
+    },
+    kerosene: {
+      label: existing?.chile?.kerosene?.label ?? DEFAULT_CHILE.kerosene.label,
+      clpPerLiter: existing?.chile?.kerosene?.clpPerLiter ?? DEFAULT_CHILE.kerosene.clpPerLiter,
+      usdPerLiter: existing?.chile?.kerosene?.usdPerLiter ?? DEFAULT_CHILE.kerosene.usdPerLiter,
+    },
+  };
+  chile[fuelType] = entry;
+
+  const lastUpdated = readLastUpdated(raw);
+
+  const doc = await FuelPriceSnapshot.findOneAndUpdate(
+    { snapshotKey: "latest" },
+    {
+      snapshotKey: "latest",
+      lastUpdated,
+      source: ingestSource,
+      chile,
+      pakistan: existing?.pakistan ?? {},
+      rawPayload: raw,
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  cache = null;
+
+  return buildChilePetrolDieselResponse(
+    chile,
+    doc.lastUpdated,
+    "database",
+    doc.updatedAt
+  );
+}
+
+export async function ingestChilePetrol(
+  raw: unknown
+): Promise<ChilePetrolDieselResponse | null> {
+  const entry = parseSingleChileEntry(raw, "gasoline");
+  if (!entry) return null;
+  return mergeAndSaveChileType("gasoline", entry, raw, "webhook");
+}
+
+export async function ingestChileDiesel(
+  raw: unknown
+): Promise<ChilePetrolDieselResponse | null> {
+  const entry = parseSingleChileEntry(raw, "diesel");
+  if (!entry) return null;
+  return mergeAndSaveChileType("diesel", entry, raw, "webhook");
+}
+
+export async function getChilePetrolDieselPrices(): Promise<ChilePetrolDieselResponse> {
+  const doc = await FuelPriceSnapshot.findOne({ snapshotKey: "latest" }).lean<IFuelPriceSnapshot>();
+  if (doc?.chile?.gasoline && doc?.chile?.diesel) {
+    return buildChilePetrolDieselResponse(
+      doc.chile as Record<FuelType, ChileFuelEntry>,
+      doc.lastUpdated,
+      "database",
+      doc.updatedAt
+    );
+  }
+
+  return buildChilePetrolDieselResponse(DEFAULT_CHILE, new Date().toISOString().slice(0, 10), "fallback");
 }

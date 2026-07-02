@@ -1,0 +1,97 @@
+{
+  "name": "Chile Gasoline Prices Scraper",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger-petrol",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [1952, 384]
+    },
+    {
+      "parameters": {
+        "url": "https://www.globalpetrolprices.com/Chile/gasoline_prices/",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fetch-petrol-page",
+      "name": "Fetch Chile Gasoline Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2240, 496]
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $input.first().json.data;\n\nconst tableMarker = 'Price (CLP/Liter)';\nconst tableStart = html.indexOf(tableMarker);\nif (tableStart === -1) {\n  throw new Error('Could not find CLP/Liter price table on the page');\n}\n\nconst chunk = html.substring(tableStart, tableStart + 800);\nconst currentPriceMatch = chunk.match(\n  /Current price<\\/td>\\s*<td[^>]*align=\"center\">([^<]+)<\\/td>/i\n);\n\nif (!currentPriceMatch) {\n  throw new Error('Could not find current gasoline price on the page');\n}\n\nconst priceFormatted = currentPriceMatch[1].trim();\nconst current_price_clp = parseFloat(priceFormatted.replace(/,/g, ''));\n\nconst reportDate = new Date().toLocaleDateString('en-GB', {\n  day: 'numeric',\n  month: 'long',\n  year: 'numeric',\n});\n\nreturn [\n  {\n    json: {\n      current_price_clp,\n      price_formatted: priceFormatted,\n      label: 'Octane-95 Gasoline',\n      report_date: reportDate,\n    },\n  },\n];"
+      },
+      "id": "parse-petrol-clp",
+      "name": "Parse CLP Prices",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2512, 496]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://backend-office-e.vercel.app/api/fuel-prices/webhook/petrol",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lastUpdated\": \"{{ $now.format('yyyy-MM-dd') }}\",\n  \"label\": \"Octane-95 Gasoline\",\n  \"clpPerLiter\": {{ $json.current_price_clp }}\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "post-petrol-price",
+      "name": "Post Price Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [2800, 496]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 23,
+              "triggerAtMinute": 59
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [1872, 656],
+      "id": "schedule-petrol",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [[{ "node": "Fetch Chile Gasoline Page", "type": "main", "index": 0 }]]
+    },
+    "Fetch Chile Gasoline Page": {
+      "main": [[{ "node": "Parse CLP Prices", "type": "main", "index": 0 }]]
+    },
+    "Parse CLP Prices": {
+      "main": [[{ "node": "Post Price Data", "type": "main", "index": 0 }]]
+    },
+    "Schedule Trigger": {
+      "main": [[{ "node": "Fetch Chile Gasoline Page", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
