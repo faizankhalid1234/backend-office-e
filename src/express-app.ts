@@ -12,6 +12,7 @@ import {
   adminRouter,
 } from "./routes/dashboard.js";
 import { uploadRouter } from "./routes/upload.js";
+import { fuelPricesRouter } from "./routes/fuel-prices.js";
 
 export function createApp() {
   const app = express();
@@ -95,6 +96,7 @@ export function createApp() {
         budget: "GET/POST /api/budget",
         dashboard: "GET /api/dashboard/stats",
         reports: "GET /api/reports?month=&year=",
+        fuelPrices: "GET /api/fuel-prices, POST /api/fuel-prices/webhook, POST /api/fuel-prices/sync",
       },
     });
   });
@@ -112,6 +114,7 @@ export function createApp() {
   app.use("/api/reports", reportsRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api/upload", uploadRouter);
+  app.use("/api/fuel-prices", fuelPricesRouter);
 
   return app;
 }
