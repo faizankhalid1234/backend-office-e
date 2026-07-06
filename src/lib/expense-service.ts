@@ -3,7 +3,7 @@ import { Category } from "../models/Category.js";
 import type { ICategory } from "../models/Category.js";
 import { Budget } from "../models/Budget.js";
 import type { IBudget } from "../models/Budget.js";
-import { decimalToNumber, expenseAmountInPKR } from "./utils-format.js";
+import { decimalToNumber, expenseAmountInUSD } from "./utils-format.js";
 import {
   startOfMonth,
   endOfMonth,
@@ -15,11 +15,11 @@ import {
 import { getDateRanges } from "./utils-format.js";
 import type { Types } from "mongoose";
 
-function sumExpensesInPKR(
+function sumExpensesInUSD(
   expenses: Array<{ amount: number; currency: string }>
 ): number {
   return expenses.reduce(
-    (sum, e) => sum + expenseAmountInPKR(decimalToNumber(e.amount), e.currency),
+    (sum, e) => sum + expenseAmountInUSD(decimalToNumber(e.amount), e.currency),
     0
   );
 }
@@ -28,11 +28,11 @@ function userFilter(userId: string, extra: Record<string, unknown> = {}) {
   return { userId: userId as unknown as Types.ObjectId, ...extra };
 }
 
-async function aggregateSumPKR(userId: string, where: Record<string, unknown> = {}) {
+async function aggregateSumUSD(userId: string, where: Record<string, unknown> = {}) {
   const expenses = await Expense.find(userFilter(userId, where))
     .select("amount currency")
     .lean<Array<{ amount: number; currency: string }>>();
-  return sumExpensesInPKR(expenses);
+  return sumExpensesInUSD(expenses);
 }
 
 export async function getCompanyExpensesTotalForRange(
@@ -44,7 +44,7 @@ export async function getCompanyExpensesTotalForRange(
   })
     .select("amount currency")
     .lean<Array<{ amount: number; currency: string }>>();
-  return sumExpensesInPKR(expenses);
+  return sumExpensesInUSD(expenses);
 }
 
 function formatExpenseDoc(exp: Record<string, unknown>) {
@@ -69,10 +69,10 @@ export async function getExpenseStats(userId: string) {
 
   const [todaySum, weekSum, monthSum, yearSum, recentExpenses, monthExpenses, monthlyData, budget, lastMonthExpenses, monthCount, companyMonthTotal] =
     await Promise.all([
-      aggregateSumPKR(userId, { date: { $gte: ranges.today } }),
-      aggregateSumPKR(userId, { date: { $gte: ranges.week } }),
-      aggregateSumPKR(userId, { date: { $gte: ranges.month } }),
-      aggregateSumPKR(userId, { date: { $gte: ranges.year } }),
+      aggregateSumUSD(userId, { date: { $gte: ranges.today } }),
+      aggregateSumUSD(userId, { date: { $gte: ranges.week } }),
+      aggregateSumUSD(userId, { date: { $gte: ranges.month } }),
+      aggregateSumUSD(userId, { date: { $gte: ranges.year } }),
       Expense.find({ userId: uid })
         .sort({ date: -1 })
         .limit(8)
@@ -100,7 +100,7 @@ export async function getExpenseStats(userId: string) {
 
   const categoryTotals = new Map<string, number>();
   for (const item of monthExpenses) {
-    const pkr = expenseAmountInPKR(decimalToNumber(item.amount), item.currency);
+    const pkr = expenseAmountInUSD(decimalToNumber(item.amount), item.currency);
     const catId = String(item.categoryId);
     categoryTotals.set(catId, (categoryTotals.get(catId) ?? 0) + pkr);
   }
@@ -118,7 +118,7 @@ export async function getExpenseStats(userId: string) {
 
   const monthTotal = monthSum;
   const budgetAmount = budget
-    ? expenseAmountInPKR(decimalToNumber((budget as IBudget).amount), (budget as IBudget).currency)
+    ? expenseAmountInUSD(decimalToNumber((budget as IBudget).amount), (budget as IBudget).currency)
     : 0;
   const budgetUsed = budgetAmount > 0 ? (companyMonthTotal / budgetAmount) * 100 : 0;
 
@@ -150,7 +150,7 @@ export async function getExpenseStats(userId: string) {
           percentage: budgetUsed,
         }
       : null,
-    lastMonthTotal: sumExpensesInPKR(lastMonthExpenses),
+    lastMonthTotal: sumExpensesInUSD(lastMonthExpenses),
     monthCount,
     highestCategory: categoryData[0] ?? null,
   };
@@ -169,7 +169,7 @@ async function getMonthlyExpenseData(userId: string) {
   const monthTotals = new Map<string, number>();
   for (const exp of expenses) {
     const key = format(exp.date, "MMM yyyy");
-    const pkr = expenseAmountInPKR(decimalToNumber(exp.amount), exp.currency);
+    const pkr = expenseAmountInUSD(decimalToNumber(exp.amount), exp.currency);
     monthTotals.set(key, (monthTotals.get(key) ?? 0) + pkr);
   }
 
@@ -209,7 +209,7 @@ export async function getMonthlyReport(userId: string, month: number, year: numb
 
   for (const exp of expenses) {
     const cat = exp.categoryId as Record<string, unknown>;
-    const amount = expenseAmountInPKR(decimalToNumber(exp.amount), exp.currency);
+    const amount = expenseAmountInUSD(decimalToNumber(exp.amount), exp.currency);
     total += amount;
     const catId = String(cat?._id ?? exp.categoryId);
     const existing = categoryTotals.get(catId) ?? {
@@ -223,7 +223,7 @@ export async function getMonthlyReport(userId: string, month: number, year: numb
 
   const breakdown = Array.from(categoryTotals.values()).sort((a, b) => b.total - a.total);
   const highest = breakdown[0] ?? null;
-  const prevMonthTotal = sumExpensesInPKR(prevExpenses);
+  const prevMonthTotal = sumExpensesInUSD(prevExpenses);
   const comparison =
     prevMonthTotal > 0 ? ((total - prevMonthTotal) / prevMonthTotal) * 100 : total > 0 ? 100 : 0;
 
@@ -259,7 +259,7 @@ export async function getTrendData(userId: string) {
   const dailyMap = new Map<string, number>();
   for (const exp of expenses) {
     const key = format(exp.date, "yyyy-MM-dd");
-    const pkr = expenseAmountInPKR(decimalToNumber(exp.amount), exp.currency);
+    const pkr = expenseAmountInUSD(decimalToNumber(exp.amount), exp.currency);
     dailyMap.set(key, (dailyMap.get(key) ?? 0) + pkr);
   }
 

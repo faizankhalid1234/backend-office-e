@@ -77,7 +77,7 @@ async function main() {
       month: now.getMonth() + 1,
       year: now.getFullYear(),
       amount: 500000,
-      currency: "PKR",
+      currency: "USD",
     },
     { upsert: true, new: true }
   );

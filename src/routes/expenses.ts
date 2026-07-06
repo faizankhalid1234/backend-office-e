@@ -1,38 +1,8 @@
 import { Router } from "express";
 import { Expense } from "../models/Expense.js";
 import { expenseSchema } from "../lib/validations.js";
-import { decimalToNumber } from "../lib/utils-format.js";
+import { formatExpense } from "../lib/format-expense.js";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
-
-function formatExpense(exp: Record<string, unknown>) {
-  const category = exp.categoryId as Record<string, unknown> | undefined;
-  const user = exp.userId as Record<string, unknown> | undefined;
-  return {
-    id: String(exp._id),
-    title: exp.title,
-    amount: decimalToNumber(exp.amount as number),
-    currency: exp.currency,
-    date: exp.date,
-    paymentMethod: exp.paymentMethod,
-    description: exp.description,
-    receiptUrl: exp.receiptUrl,
-    receiptName: exp.receiptName,
-    userId: String((exp.userId as { _id?: unknown })?._id ?? exp.userId),
-    categoryId: String(category?._id ?? exp.categoryId),
-    createdAt: exp.createdAt,
-    updatedAt: exp.updatedAt,
-    category: category
-      ? {
-          id: String(category._id),
-          name: category.name,
-          color: category.color,
-          description: category.description,
-          isDefault: category.isDefault,
-        }
-      : undefined,
-    user: user?.name ? { name: user.name } : undefined,
-  };
-}
 
 export const expensesRouter = Router();
 

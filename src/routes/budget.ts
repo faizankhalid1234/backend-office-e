@@ -3,7 +3,7 @@ import { startOfMonth, endOfMonth } from "date-fns";
 import { Budget } from "../models/Budget.js";
 import type { IBudget } from "../models/Budget.js";
 import { budgetSchema } from "../lib/validations.js";
-import { decimalToNumber, expenseAmountInPKR } from "../lib/utils-format.js";
+import { decimalToNumber, expenseAmountInUSD } from "../lib/utils-format.js";
 import { requireAuth, requireAdmin, type AuthRequest } from "../middleware/auth.js";
 import { getCompanyExpensesTotalForRange } from "../lib/expense-service.js";
 
@@ -22,7 +22,7 @@ budgetRouter.get("/", requireAuth, async (req: AuthRequest, res) => {
   const used = await getCompanyExpensesTotalForRange(start, end);
 
   const budgetAmount = budget
-    ? expenseAmountInPKR(decimalToNumber(budget.amount), budget.currency)
+    ? expenseAmountInUSD(decimalToNumber(budget.amount), budget.currency)
     : 0;
 
   res.json({

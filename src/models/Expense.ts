@@ -4,7 +4,7 @@ const expenseSchema = new Schema(
   {
     title: { type: String, required: true },
     amount: { type: Number, required: true },
-    currency: { type: String, enum: ["PKR", "CLP"], default: "PKR" },
+    currency: { type: String, enum: ["USD", "CLP"], default: "USD" },
     date: { type: Date, required: true },
     paymentMethod: {
       type: String,

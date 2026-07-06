@@ -3,21 +3,24 @@ import {
   formatMoney,
   formatDualMoney,
   type CurrencyCode,
-  toPKR,
-  isCurrencyCode,
+  toUSD,
+  normalizeCurrency,
 } from "./currency.js";
 
-export function formatCurrency(amount: number, currency: CurrencyCode = "PKR"): string {
+export function formatCurrency(amount: number, currency: CurrencyCode = "USD"): string {
   return formatMoney(amount, currency);
 }
 
-export function formatDualCurrency(amount: number, sourceCurrency: CurrencyCode = "PKR"): string {
+export function formatDualCurrency(amount: number, sourceCurrency: string = "USD"): string {
   return formatDualMoney(amount, sourceCurrency);
 }
 
-export function expenseAmountInPKR(amount: number, currency: string): number {
-  return toPKR(amount, isCurrencyCode(currency) ? currency : "PKR");
+export function expenseAmountInUSD(amount: number, currency: string): number {
+  return toUSD(amount, currency);
 }
+
+/** @deprecated Use expenseAmountInUSD */
+export const expenseAmountInPKR = expenseAmountInUSD;
 
 export function formatDate(date: Date | string): string {
   return format(new Date(date), "dd MMM yyyy");
@@ -50,3 +53,5 @@ export function getBudgetAlertLevel(percentage: number): "normal" | "warning" | 
   if (percentage >= 80) return "warning";
   return "normal";
 }
+
+export { normalizeCurrency };

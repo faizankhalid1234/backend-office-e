@@ -9,7 +9,8 @@ import { decimalToNumber } from "../lib/utils-format.js";
 import type { IBudget } from "../models/Budget.js";
 import { User } from "../models/User.js";
 import { Expense } from "../models/Expense.js";
-import { requireAuth, type AuthRequest } from "../middleware/auth.js";
+import { requireAuth, requireAdmin, type AuthRequest } from "../middleware/auth.js";
+import { formatExpense } from "../lib/format-expense.js";
 
 export const dashboardRouter = Router();
 
@@ -76,4 +77,29 @@ adminRouter.get("/budget-current", async (_req, res) => {
         }
       : null
   );
+});
+
+adminRouter.get("/expenses", requireAdmin, async (req: AuthRequest, res) => {
+  const userId = req.query.userId as string | undefined;
+  const categoryId = req.query.categoryId as string | undefined;
+  const search = req.query.search as string | undefined;
+
+  const filter: Record<string, unknown> = {};
+  if (userId) filter.userId = userId;
+  if (categoryId) filter.categoryId = categoryId;
+  if (search) {
+    filter.$or = [
+      { title: { $regex: search, $options: "i" } },
+      { description: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  const expenses = await Expense.find(filter)
+    .populate("categoryId")
+    .populate("userId", "name email role")
+    .sort({ date: -1, createdAt: -1 })
+    .limit(1000)
+    .lean();
+
+  res.json(expenses.map((e) => formatExpense(e as Record<string, unknown>)));
 });
