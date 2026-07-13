@@ -5,7 +5,7 @@ const budgetSchema = new Schema(
     month: { type: Number, required: true, min: 1, max: 12 },
     year: { type: Number, required: true },
     amount: { type: Number, required: true },
-    currency: { type: String, enum: ["USD", "CLP"], default: "USD" },
+    currency: { type: String, enum: ["USD", "JPY", "CLP"], default: "USD" },
   },
   { timestamps: true }
 );
